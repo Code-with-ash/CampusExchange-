@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo, useTransition, useEffect } from "react";
+import { Suspense, useState, useMemo, useTransition, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import axios from "axios";
 import MarketplaceNavbar from "./components/MarketplaceNavbar";
 import HeroHeader from "./components/HeroHeader";
 import CategoryChips from "./components/CategoryChips";
@@ -14,23 +16,42 @@ import {
   SlidersHorizontal,
   ArrowUpDown,
   X,
+  LoaderCircle,
 } from "lucide-react";
 
-export default function MarketplacePage() {
+const PRODUCTS_PER_PAGE = 12;
+
+function MarketplaceContent() {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const pageFromUrl = Number.parseInt(searchParams.get("page") || "1", 10);
+  const initialPage = Number.isFinite(pageFromUrl) && pageFromUrl > 0 ? pageFromUrl : 1;
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [desktopFilterOpen, setDesktopFilterOpen] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(initialPage);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
 
   useEffect(() => {
     const loadListings = async () => {
+      setLoading(true);
       try {
-        const response = await fetch("http://localhost:3001/api/listings", { cache: "no-store" });
-        const json = await response.json();
-        console.log("Fetched listings:", json); // Debugging log
-        if (json.success) {
-          setProducts(json.data);
+        const response = await axios.get("http://localhost:3001/api/listings", {
+          params: { page: currentPage, limit: PRODUCTS_PER_PAGE },
+        });
+        const json = response.data;
+        setProducts(json.products ?? []);
+        setCurrentPage(json.currentPage ?? currentPage);
+        setTotalPages(json.totalPages ?? 1);
+        setTotalProducts(json.totalProducts ?? 0);
+        if (json.currentPage && json.currentPage !== currentPage) {
+          const nextParams = new URLSearchParams(searchParams.toString());
+          nextParams.set("page", String(json.currentPage));
+          router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
         }
       } catch (error) {
         console.error("Failed to load listings", error);
@@ -41,7 +62,15 @@ export default function MarketplacePage() {
     };
 
     loadListings();
-  }, []);
+  }, [currentPage]);
+
+  const changePage = (page: number) => {
+    if (page < 1 || page > totalPages || page === currentPage) return;
+    setCurrentPage(page);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("page", String(page));
+    router.push(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  };
 
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: "",
@@ -196,7 +225,7 @@ export default function MarketplacePage() {
               {filters.selectedCategory === "All" ? "All Listings" : filters.selectedCategory}
             </h2>
             <span className="text-xs text-[#64748B] bg-white px-2.5 py-1 rounded-full border border-[#E2E8F0] font-medium">
-              {filteredProducts.length} {filteredProducts.length === 1 ? "item" : "items"}
+              {totalProducts} {totalProducts === 1 ? "item" : "items"}
             </span>
 
             {filters.searchQuery && (
@@ -291,7 +320,13 @@ export default function MarketplacePage() {
           {/* 5. Marketplace Grid */}
           <div className="flex-1 w-full min-w-0">
             {loading || isPending ? (
-              <ProductSkeletonGrid count={8} />
+              <>
+                <div className="flex items-center justify-center gap-2 mb-5 text-sm text-[#64748B]">
+                  <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
+                  <span>Loading listings...</span>
+                </div>
+                <ProductSkeletonGrid count={8} />
+              </>
             ) : filteredProducts.length > 0 ? (
               <div
                 id="marketplace-grid"
@@ -313,6 +348,30 @@ export default function MarketplacePage() {
                 onReset={handleResetFilters}
                 showReset={activeFilterCount > 0}
               />
+            )}
+
+            {!loading && totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => changePage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 text-sm font-semibold rounded-xl border border-[#E2E8F0] bg-white text-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#BFDBFE]"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-[#64748B]">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => changePage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 text-sm font-semibold rounded-xl border border-[#E2E8F0] bg-white text-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#BFDBFE]"
+                >
+                  Next
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -366,5 +425,13 @@ export default function MarketplacePage() {
       {/* Footer */}
       <Footer />
     </div>
+  );
+}
+
+export default function MarketplacePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#F8FAFC]" />}>
+      <MarketplaceContent />
+    </Suspense>
   );
 }

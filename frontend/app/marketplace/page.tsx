@@ -18,6 +18,7 @@ import {
   X,
   LoaderCircle,
 } from "lucide-react";
+import { API_URL } from "../../lib/api";
 
 const PRODUCTS_PER_PAGE = 12;
 
@@ -40,7 +41,7 @@ function MarketplaceContent() {
     const loadListings = async () => {
       setLoading(true);
       try {
-        const response = await axios.get("http://localhost:3001/api/listings", {
+        const response = await axios.get(`${API_URL}/api/listings`, {
           params: { page: currentPage, limit: PRODUCTS_PER_PAGE },
         });
         const json = response.data;
@@ -53,8 +54,7 @@ function MarketplaceContent() {
           nextParams.set("page", String(json.currentPage));
           router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
         }
-      } catch (error) {
-        console.error("Failed to load listings", error);
+      } catch {
         setProducts([]);
       } finally {
         setLoading(false);

@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import Link from "next/link";
 import { Clock, MapPin, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Product } from "../types";

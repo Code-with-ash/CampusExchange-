@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import MarketplaceNavbarWrapper from "./MarketplaceNavbarWrapper";
@@ -13,6 +14,7 @@ import {
   Heart,
   BadgeAlert,
 } from "lucide-react";
+import { API_URL } from "../../../lib/api";
 
 interface ProductDetailPageProps {
   params: Promise<{ id: string }>;
@@ -24,9 +26,11 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   let product: any = null;
 
   try {
-    const response = await fetch("http://localhost:3001/api/listings", { cache: "no-store" });
-    const json = await response.json();
-    product = (json.data || []).find((item: any) => item.id === id);
+    const response = await fetch(`${API_URL}/api/listings/${id}`, { cache: "no-store" });
+    if (response.ok) {
+      const json = await response.json();
+      product = json.data;
+    }
   } catch (error) {
     product = null;
   }
@@ -160,15 +164,25 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
             </div>
 
             <div className="space-y-2 pt-2">
-              <a
-                href={`https://wa.me/${(product.whatsappNumber || "+919876543210").replace(/[^0-9]/g, "")}?text=${whatsappMessage}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all"
-              >
-                <MessageCircle size={17} strokeWidth={2.5} />
-                <span>Chat with Seller on WhatsApp</span>
-              </a>
+             {product.whatsappNumber ? (
+  <a
+    href={`https://wa.me/${product.whatsappNumber.replace(/[^0-9]/g, "")}?text=${whatsappMessage}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="w-full py-3.5 px-4 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-sm hover:shadow transition-all"
+  >
+    <MessageCircle size={17} strokeWidth={2.5} />
+    <span>Chat with Seller on WhatsApp</span>
+  </a>
+) : (
+  <button
+    disabled
+    className="w-full py-3.5 px-4 rounded-xl bg-gray-300 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-not-allowed"
+  >
+    <MessageCircle size={17} strokeWidth={2.5} />
+    <span>WhatsApp Not Available</span>
+  </button>
+)}
 
               <div className="flex items-center gap-2">
                 <button

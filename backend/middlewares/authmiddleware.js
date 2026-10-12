@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken'
+import { verifyToken } from '../utils/jwt.js'
 export default function authMiddleware (req,res,next) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -11,10 +11,10 @@ export default function authMiddleware (req,res,next) {
         return res.status(401).json({message: "Unauthorized"})
     }
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET)
+        const decoded = verifyToken(token, 'access')
         req.user = decoded
         next()
-    } catch (err) {
+    } catch {
         return res.status(401).json({ message: "Invalid or expired token" })
     }
 }

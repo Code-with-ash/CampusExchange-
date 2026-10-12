@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef, useCallback, ChangeEvent, useEffect } from "react";
 import Link from "next/link";
@@ -24,6 +25,7 @@ import {
 import { CategoryType, ConditionType } from "../marketplace/types";
 import { useRouter } from "next/navigation";
 import axios from "axios";
+import { API_URL } from "../../lib/api";
 /* ────────────────────────────────────────────
    Types
    ──────────────────────────────────────────── */
@@ -157,13 +159,23 @@ function InputBase({
    ──────────────────────────────────────────── */
 export default function SellPage() {
   const router = useRouter()
-  const [isLoggedIn , setIsLoggedIn ] = useState(false)
+  const [form, setForm] = useState<FormData>({
+    title: "",
+    description: "",
+    price: "",
+    originalPrice: "",
+    condition: "",
+    category: "",
+    branch: "",
+    year: "",
+    whatsapp: "",
+    location: "",
+  });
 useEffect(()=> {
   const token = localStorage.getItem("token")
   if(token){
-    setIsLoggedIn(true)
     const fetchdata = async()=>{
-   const data = await axios.get("http://localhost:3001/api/user/me",{
+   await axios.get(`${API_URL}/api/user/me`,{
       headers:{
         Authorization: `Bearer ${token}`
       }
@@ -171,20 +183,19 @@ useEffect(()=> {
       setForm((prev)=>{
         return{
           ...prev,
-          whatsapp: res.data.mobilenumber || "",
-          year: res.data.year || "",
-          branch: res.data.department || "",
+          whatsapp: res.data.data?.mobilenumber || "",
+          year: res.data.data?.year ? String(res.data.data.year) : "",
+          branch: res.data.data?.department || "",
         }
       })
-    }).catch((err)=>{
-      console.log(err)
+    }).catch(()=>{
     })
   }
   fetchdata()
   }else{
     router.push("/login")
   }
-}, []);
+}, [router]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -200,19 +211,6 @@ useEffect(()=> {
   const [aiServiceError, setAiServiceError] = useState<string | null>(null);
   const [validationToken, setValidationToken] = useState<string | null>(null);
 
-  const [form, setForm] = useState<FormData>({
-    title: "",
-    description: "",
-    price: "",
-    originalPrice: "",
-    condition: "",
-    category: "",
-    branch: "",
-    year: "",
-    whatsapp: "",
-    location: "",
-  });
-
   /* ── AI Validation Call ── */
   const runAiValidation = async (targetFile: File) => {
     setAiValidating(true);
@@ -226,7 +224,7 @@ useEffect(()=> {
       formData.append("image", targetFile);
 
       const res = await axios.post(
-        "http://localhost:3001/api/listproduct/validate",
+        `${API_URL}/api/listproduct/validate`,
         formData,
         {
           headers: {
@@ -285,10 +283,9 @@ useEffect(()=> {
           images: reason,
         }));
       }
-    } catch (err: any) {
-      console.error("AI service error:", err);
+    } catch (err: unknown) {
       setValidationToken(null);
-      if (err.response?.data?.isRejection) {
+      if (axios.isAxiosError(err) && err.response?.data?.isRejection) {
         const reason = err.response.data.message || "This photo is not approved.";
         setAiRejectionReason(reason);
         setImages([]);
@@ -409,7 +406,7 @@ useEffect(()=> {
         formData.append("image", images[0]);
       }
 
-      await axios.post("http://localhost:3001/api/listproduct/create", formData, {
+      await axios.post(`${API_URL}/api/listproduct/create`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data",
@@ -417,9 +414,10 @@ useEffect(()=> {
       });
 
       setSubmitted(true);
-    } catch (err: any) {
-      console.log(err);
-      const backendMessage = err.response?.data?.message || "Unable to publish this listing right now. Please try again.";
+    } catch (err: unknown) {
+      const backendMessage = axios.isAxiosError(err) && err.response?.data?.message
+        ? err.response.data.message
+        : "Unable to publish this listing right now. Please try again.";
       setErrors((prev) => ({
         ...prev,
         submit: backendMessage,
@@ -448,7 +446,7 @@ useEffect(()=> {
           </div>
           <h2 className="text-2xl font-bold text-[#0F172A] mb-3">Listing Published!</h2>
           <p className="text-sm text-[#64748B] leading-relaxed mb-8">
-            Your item <strong className="text-[#0F172A]">"{form.title}"</strong> is now live
+            Your item <strong className="text-[#0F172A]">&quot;{form.title}&quot;</strong> is now live
             on Campus Exchange. Students can reach you on WhatsApp at{" "}
             <strong className="text-[#0F172A]">{form.whatsapp}</strong>.
           </p>
@@ -864,7 +862,7 @@ useEffect(()=> {
                   <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
                     <Tag size={14} className="text-emerald-600" />
                     <p className="text-xs text-emerald-700 font-semibold">
-                      Buyers save <strong>{discount}%</strong> — that's ₹{Number(form.originalPrice) - Number(form.price)} off the retail price!
+                      Buyers save <strong>{discount}%</strong> — that&apos;s ₹{Number(form.originalPrice) - Number(form.price)} off the retail price!
                     </p>
                   </div>
                 )}

@@ -14,6 +14,7 @@ import {
     Phone
 } from "lucide-react"
 import axios from "axios"
+import { API_URL } from "../../lib/api"
 export default function OtpPage() {
     const router = useRouter()
     const [otp, setOtp] = useState(["", "", "", "", "", ""])
@@ -99,7 +100,7 @@ if(!saved){
   year: number;
   department: string;
 };
-            const res = await axios.post(`http://localhost:3001/api/auth/verify-otp`, {
+            const res = await axios.post(`${API_URL}/api/auth/verify-otp`, {
                 sessionid: state.sessionid,
                 otp: fullOtp,
                 username: state.username,

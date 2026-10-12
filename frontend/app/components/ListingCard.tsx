@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import { MapPin, CheckCircle2 } from "lucide-react";
 
 export interface ListingCardProps {

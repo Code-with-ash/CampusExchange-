@@ -19,6 +19,7 @@ import {
     Eye,
     EyeOff
 } from "lucide-react"
+import { API_URL } from "../../lib/api"
 export default function Signup() {
     const [name, setName] = useState("")
     const [username, setUsername] = useState("")
@@ -49,7 +50,7 @@ export default function Signup() {
 
         try {
             setLoading(true)
-            const response = await axios.post("http://localhost:3001/api/auth/signup", {
+            const response = await axios.post(`${API_URL}/api/auth/signup`, {
                 name: name.trim(),
                 username: username.trim(),
                 password,

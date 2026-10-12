@@ -19,7 +19,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     })
     return res.status(200).json({ success: true, data: user })
   } catch (error) {
-    console.log(error)
+    console.error('Profile lookup failed:', error?.message || 'Unknown error')
     return res.status(500).json({ success: false, message: 'Something went wrong' })
   }
 })

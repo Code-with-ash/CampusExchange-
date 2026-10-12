@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { ComponentType, useState } from "react";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
@@ -22,7 +22,7 @@ import {
 interface Section {
   id: string;
   title: string;
-  icon: any;
+  icon: ComponentType<{ className?: string }>;
   summary: string;
   content: React.ReactNode;
 }

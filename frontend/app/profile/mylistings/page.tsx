@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect, useMemo, useTransition } from "react";
 import Link from "next/link";
@@ -34,6 +35,7 @@ import {
   ShieldCheck,
   Check,
 } from "lucide-react";
+import { API_URL } from "../../../lib/api";
 import MarketplaceNavbar from "@/app/marketplace/components/MarketplaceNavbar";
 import { CategoryType, ConditionType, Product } from "@/app/marketplace/types";
 
@@ -142,7 +144,7 @@ export default function MyListingsPage() {
     setUserInitials(getInitials(storedUser));
 
     try {
-      const response = await axios.get("http://localhost:3001/api/listings/my-listings", {
+      const response = await axios.get(`${API_URL}/api/listings/my-listings`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -152,7 +154,6 @@ export default function MyListingsPage() {
         setListings(response.data.data);
       }
     } catch (error: any) {
-      console.error("Failed to fetch my listings:", error);
       if (error.response?.status === 401) {
         setIsLoggedIn(false);
       } else {
@@ -237,7 +238,7 @@ export default function MyListingsPage() {
 
     setDeletingId(deleteModalItem.id);
     try {
-      await axios.delete(`http://localhost:3001/api/listings/${deleteModalItem.id}`, {
+      await axios.delete(`${API_URL}/api/listings/${deleteModalItem.id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -247,8 +248,7 @@ export default function MyListingsPage() {
       setListings((prev) => prev.filter((item) => item.id !== deleteModalItem.id));
       showToast(`"${deleteModalItem.title}" has been deleted.`, "success");
       setDeleteModalItem(null);
-    } catch (error) {
-      console.error("Error deleting listing:", error);
+    } catch {
       showToast("Failed to delete listing. Please try again.", "error");
     } finally {
       setDeletingId(null);
@@ -291,7 +291,7 @@ export default function MyListingsPage() {
 
     try {
       await axios.put(
-        `http://localhost:3001/api/listings/${editModalItem.id}`,
+        `${API_URL}/api/listings/${editModalItem.id}`,
         {
           title: editFormData.title.trim(),
           description: editFormData.description.trim(),
@@ -329,8 +329,7 @@ export default function MyListingsPage() {
 
       showToast("Listing updated successfully!", "success");
       setEditModalItem(null);
-    } catch (error) {
-      console.error("Error updating listing:", error);
+    } catch {
       showToast("Failed to update listing. Please try again.", "error");
     } finally {
       setSavingEdit(false);

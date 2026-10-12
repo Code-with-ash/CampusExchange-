@@ -5,6 +5,7 @@ import { ArrowRight, PlusCircle } from "lucide-react";
 import { useEffect } from "react";
 import { useState } from "react";
 import { Product } from "../marketplace/types";
+import { API_URL } from "../../lib/api";
 
 
 
@@ -12,7 +13,7 @@ export default function ListingsSection() {
   const [listings, setListings] = useState<Product[]>([]);
   useEffect(() => {
     const getData = async () => {
-      const response = await fetch("http://localhost:3001/api/listings");
+      const response = await fetch(`${API_URL}/api/listings`);
       const data = await response.json();
       setListings(data.data);
     };

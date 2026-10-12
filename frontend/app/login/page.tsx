@@ -14,6 +14,7 @@ import {
     Eye,
     EyeOff
 } from "lucide-react"
+import { API_URL } from "../../lib/api"
 
 export default function Login() {
     const router = useRouter()
@@ -36,7 +37,7 @@ export default function Login() {
         }
         try {
             setLoading(true)
-            const response = await axios.post("http://localhost:3001/api/auth/login", {
+            const response = await axios.post(`${API_URL}/api/auth/login`, {
                 username: username.trim(),
                 password
             })
@@ -46,7 +47,6 @@ export default function Login() {
                 localStorage.setItem("user", response.data.user.username);
                 localStorage.setItem("branch", response.data.branch);
                 localStorage.setItem("year", response.data.year);
-                console.log(response.data.user.username);
             }
 
             setSuccess(true)
@@ -69,8 +69,7 @@ export default function Login() {
             if (token) {
                 router.push("/marketplace")
             }
-        } catch (err) {
-            console.log(err)
+        } catch {
         }
     }, [])
     return (

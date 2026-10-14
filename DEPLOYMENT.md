@@ -26,6 +26,11 @@ production.
 The API is an exported Express application so Vercel can run it as a function;
 `npm start` remains available for a persistent Node.js host and local use.
 
+Image validation uses Groq's `qwen/qwen3.8-27b` vision model, retries transient
+failures once, and validates the model's structured response before approving an
+image. Set `GROQ_API_KEY` in the backend project's Production environment and
+redeploy. Retries reduce transient failures but cannot guarantee zero downtime.
+
 ## Frontend (Vercel)
 
 1. Create a second Vercel project for the same repository with the root directory

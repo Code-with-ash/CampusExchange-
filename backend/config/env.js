@@ -6,7 +6,7 @@ const requiredEnvironmentVariables = [
   'DIRECT_URL',
   'SUPABASE_URL',
   'SUPABASE_SECRET_KEY',
-  'GEMINI_API_KEY',
+  'GROQ_API_KEY',
   'TWO_FACTOR_API_KEY',
 ]
 

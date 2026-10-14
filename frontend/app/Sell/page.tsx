@@ -100,6 +100,8 @@ function validate(form: FormData, images: File[]): FormErrors {
     errors.originalPrice = "Original price should be ≥ selling price.";
   if (!form.condition) errors.condition = "Please select a condition.";
   if (!form.category) errors.category = "Please select a category.";
+  if (form.location.trim().length < 2 || form.location.trim().length > 200)
+    errors.location = "Pickup location must be between 2 and 200 characters.";
   return errors;
 }
 
@@ -204,6 +206,7 @@ useEffect(()=> {
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [aiValidating, setAiValidating] = useState(false);
   const [aiSuccess, setAiSuccess] = useState<string | null>(null);
@@ -348,6 +351,7 @@ useEffect(()=> {
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setSubmitError(null);
     if (touched[name]) {
       const errs = validate({ ...form, [name]: value }, images);
       setErrors((prev) => ({ ...prev, [name]: errs[name] || "" }));
@@ -368,6 +372,7 @@ useEffect(()=> {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
     const allTouched: Record<string, boolean> = {};
     Object.keys(form).forEach((k) => (allTouched[k] = true));
     allTouched.images = true;
@@ -379,7 +384,10 @@ useEffect(()=> {
     }
     setErrors(errs);
 
-    if (Object.values(errs).some(Boolean)) return;
+    if (Object.values(errs).some(Boolean)) {
+      if (errs.location) setSubmitError(errs.location);
+      return;
+    }
 
     setSubmitting(true);
 
@@ -418,10 +426,16 @@ useEffect(()=> {
       const backendMessage = axios.isAxiosError(err) && err.response?.data?.message
         ? err.response.data.message
         : "Unable to publish this listing right now. Please try again.";
+      const isLocationError = backendMessage.toLowerCase().includes("pickup location");
       setErrors((prev) => ({
         ...prev,
         submit: backendMessage,
+        ...(isLocationError ? { location: backendMessage } : {}),
       }));
+      if (isLocationError) {
+        setTouched((prev) => ({ ...prev, location: true }));
+      }
+      setSubmitError(backendMessage);
     } finally {
       setSubmitting(false);
     }
@@ -933,7 +947,7 @@ useEffect(()=> {
             {/* department , year , whatsapp number from backend call*/}
                 {/* Pickup Location */}
                 <div>
-                  <FieldLabel htmlFor="location">Pickup Location <span className="text-[#94A3B8] font-normal normal-case">Optional</span></FieldLabel>
+                  <FieldLabel htmlFor="location" required>Pickup Location</FieldLabel>
                   <InputBase
                     id="location"
                     name="location"
@@ -941,7 +955,12 @@ useEffect(()=> {
                     placeholder="e.g., Hostel Block B, Library Gate"
                     value={form.location}
                     onChange={handleChange}
+                    onBlur={() => handleBlur("location")}
+                    minLength={2}
+                    maxLength={200}
+                    hasError={!!(errors.location && touched.location)}
                   />
+                  {touched.location && <FieldError message={errors.location} />}
                 </div>
 
                 {/* Submit Button */}
@@ -970,6 +989,45 @@ useEffect(()=> {
           </div>
         </form>
       </main>
+      {submitError && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+          role="presentation"
+          onClick={() => setSubmitError(null)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="publish-error-title"
+            aria-describedby="publish-error-message"
+            className="w-full max-w-sm rounded-2xl border border-rose-200 bg-white p-6 text-center shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+              <AlertCircle size={24} />
+            </div>
+            <h2 id="publish-error-title" className="text-lg font-bold text-[#0F172A]">
+              Could not publish listing
+            </h2>
+            <p id="publish-error-message" className="mt-2 text-sm text-[#64748B]">
+              {submitError}
+            </p>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => {
+                setSubmitError(null);
+                if (errors.location) {
+                  document.getElementById("location")?.focus();
+                }
+              }}
+              className="mt-5 w-full rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
+            >
+              Review details
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

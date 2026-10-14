@@ -4,7 +4,6 @@ import authMiddleware from '../../middlewares/authmiddleware.js'
 import supabase from '../../config/supabse.js'
 import multer from 'multer'
 import crypto from 'crypto'
-import { GoogleGenAI } from "@google/genai";
 import { aiRateLimit, listingRateLimit } from '../../middlewares/rateLimit.js'
 import { signImageValidationToken, verifyToken } from '../../utils/jwt.js'
 import {
@@ -15,8 +14,10 @@ import {
   validateString,
   parseFiniteNumber,
 } from '../../utils/validation.js'
-const ai = new GoogleGenAI({});
 const router = express.Router()
+const groqVisionModel = 'qwen/qwen3.8-27b'
+const groqRequestTimeoutMs = 10000
+const groqMaxAttempts = 2
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -28,6 +29,109 @@ const upload = multer({
     cb(null, true)
   },
 })
+
+function parseProductAnalysis(responseText) {
+  if (typeof responseText !== 'string' || !responseText.trim()) {
+    throw new Error('AI returned an empty response')
+  }
+
+  const cleanText = responseText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
+  const candidate = JSON.parse(cleanText)
+  if (
+    typeof candidate !== 'object' ||
+    candidate === null ||
+    typeof candidate.allowed !== 'boolean' ||
+    typeof candidate.reason !== 'string' ||
+    typeof candidate.productName !== 'string' ||
+    typeof candidate.category !== 'string' ||
+    typeof candidate.condition !== 'string' ||
+    typeof candidate.description !== 'string' ||
+    candidate.productName.length > 120 ||
+    candidate.description.length > 2000 ||
+    candidate.reason.length > 500 ||
+    (candidate.allowed && (!listingCategories.has(candidate.category) || !listingConditions.has(candidate.condition)))
+  ) {
+    throw new Error('AI returned an invalid product analysis')
+  }
+
+  return candidate
+}
+
+async function generateProductAnalysis(image, promptText) {
+  let lastError
+
+  for (let attempt = 1; attempt <= groqMaxAttempts; attempt += 1) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), groqRequestTimeoutMs)
+
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: groqVisionModel,
+          temperature: 0.2,
+          max_completion_tokens: 1024,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: promptText,
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${image.mimetype};base64,${image.buffer.toString('base64')}`,
+                  },
+                },
+                {
+                  type: 'text',
+                  text: 'Analyze this product image according to the system instructions.',
+                },
+              ],
+            },
+          ],
+        }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        const requestError = new Error(`Groq API returned HTTP ${response.status}`)
+        if (response.status !== 408 && response.status !== 429 && response.status < 500) {
+          throw Object.assign(requestError, { retryable: false })
+        }
+        throw requestError
+      }
+
+      const result = await response.json()
+      const responseText = result.choices?.[0]?.message?.content
+      if (typeof responseText !== 'string') {
+        throw new Error('Groq API returned no analysis text')
+      }
+
+      return parseProductAnalysis(responseText)
+    } catch (error) {
+      lastError = error
+      const retryable = error?.retryable !== false
+      if (!retryable || attempt === groqMaxAttempts) {
+        throw error
+      }
+
+      console.error(`Groq image analysis attempt ${attempt} failed:`, error?.message || 'Unknown error')
+      await new Promise((resolve) => setTimeout(resolve, attempt * 500))
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  throw lastError || new Error('Groq image analysis failed')
+}
 
 
 router.post('/create', authMiddleware, listingRateLimit, upload.single('image'), async (req, res) => {
@@ -172,61 +276,18 @@ If allowed is true:
 - description: A helpful, 2-3 sentence description highlighting the item's key features, condition observed, and ideal use for college students.
 - reason: Leave empty string ""`
 
-    let response
+    let parsed
     try {
-      response = await Promise.race([
-        ai.models.generateContent({
-        model: "gemini-3.6-flash",
-        contents: [
-          {
-            inlineData: {
-              data: req.file.buffer.toString("base64"),
-              mimeType: req.file.mimetype,
-            },
-          },
-          promptText,
-        ],
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AI request timed out')), 15000)),
-      ])
-    } catch (modelErr) {
-      console.error("Gemini API request failed:", modelErr?.message || 'Unknown error')
-      return res.status(500).json({
+      parsed = await generateProductAnalysis(req.file, promptText)
+    } catch (modelError) {
+      console.error("Groq image analysis failed after retries:", modelError?.message || 'Unknown error')
+      return res.status(503).json({
         success: false,
         isAiError: true,
-        message: "Something went wrong with the AI service. Please try again in a few minutes.",
+        message: "Image analysis is temporarily unavailable. Please retry in a few moments.",
       })
     }
 
-    let parsed
-    try {
-      const cleanText = response.text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
-      const candidate = JSON.parse(cleanText)
-      if (
-        typeof candidate !== 'object' ||
-        candidate === null ||
-        typeof candidate.allowed !== 'boolean' ||
-        typeof candidate.reason !== 'string' ||
-        typeof candidate.productName !== 'string' ||
-        typeof candidate.category !== 'string' ||
-        typeof candidate.condition !== 'string' ||
-        typeof candidate.description !== 'string' ||
-        candidate.productName.length > 120 ||
-        candidate.description.length > 2000 ||
-        candidate.reason.length > 500 ||
-        (candidate.allowed && (!listingCategories.has(candidate.category) || !listingConditions.has(candidate.condition)))
-      ) {
-        throw new Error('Invalid AI response')
-      }
-      parsed = candidate
-    } catch (parseErr) {
-      console.error("AI response validation failed:", parseErr?.message || 'Unknown error')
-      return res.status(500).json({
-        success: false,
-        isAiError: true,
-        message: "Something went wrong with the AI service. Please try again in a few minutes.",
-      })
-    }
     if (parsed.allowed) {
       const imageHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex')
       const validationToken = signImageValidationToken(

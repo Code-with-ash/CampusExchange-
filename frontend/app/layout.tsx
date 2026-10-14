@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   description:
     "Find affordable books, engineering tools, electronics, and hostel essentials from students in your own college. Join Campus Exchange today.",
   keywords: ["campus marketplace", "student marketplace", "buy sell college", "second hand books", "engineering tools"],
+  other: {
+    "google-adsense-account": "ca-pub-6323212634000918",
+  },
   openGraph: {
     title: "Campus Exchange — Buy & Sell on Your Campus",
     description:

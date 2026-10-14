@@ -44,14 +44,20 @@ export default function Login() {
 
             if (response.data.token) {
                 localStorage.setItem("token", response.data.token);
-                localStorage.setItem("user", response.data.user.username);
-                localStorage.setItem("branch", response.data.branch);
-                localStorage.setItem("year", response.data.year);
+                localStorage.setItem("user", response.data.user.name || response.data.user.username);
+                localStorage.setItem("username", response.data.user.username);
+                localStorage.setItem("branch", response.data.branch ?? "");
+                localStorage.setItem("year", String(response.data.year ?? ""));
             }
 
             setSuccess(true)
             setTimeout(() => {
-                router.push("/marketplace")
+                const nextPath = new URLSearchParams(window.location.search).get("next")
+                const destination =
+                    nextPath?.startsWith("/") && !nextPath.startsWith("//")
+                        ? nextPath
+                        : "/marketplace"
+                router.push(destination)
             }, 1000)
         } catch (err) {
             let errorMsg = "Invalid username or password. Please try again."

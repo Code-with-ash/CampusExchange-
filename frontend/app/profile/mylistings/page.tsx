@@ -65,6 +65,7 @@ export default function MyListingsPage() {
   const [department, setDepartment] = useState<string>("");
   const [year, setYear] = useState<string>("");
   const [userInitials, setUserInitials] = useState<string>("ME");
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Listings State
   const [listings, setListings] = useState<Product[]>([]);
@@ -155,6 +156,10 @@ export default function MyListingsPage() {
       }
     } catch (error: any) {
       if (error.response?.status === 401) {
+        ["token", "user", "username", "branch", "year"].forEach((key) =>
+          localStorage.removeItem(key),
+        );
+        setSessionExpired(true);
         setIsLoggedIn(false);
       } else {
         showToast("Could not load your listings. Please try again.", "error");
@@ -357,14 +362,16 @@ export default function MyListingsPage() {
             </div>
             <h2 className="text-2xl font-bold text-[#0F172A] tracking-tight">Access Your Listings</h2>
             <p className="text-sm text-[#64748B] mt-2 mb-8 leading-relaxed">
-              Please log in with your student account to view, manage, and track your active campus marketplace listings.
+              {sessionExpired
+                ? "Your session expired. Please sign in again to view and manage your listings."
+                : "Please log in with your student account to view, manage, and track your active campus marketplace listings."}
             </p>
             <div className="flex flex-col gap-3">
               <Link
-                href="/login"
+                href="/login?next=/profile/mylistings"
                 className="w-full py-3.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all text-center flex items-center justify-center gap-2"
               >
-                Sign In to Account
+                {sessionExpired ? "Sign In Again" : "Sign In to Account"}
                 <ChevronRight size={16} />
               </Link>
               <Link

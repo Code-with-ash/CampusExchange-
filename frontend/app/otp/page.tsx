@@ -113,6 +113,10 @@ if(!saved){
             });
             if(res.status == 200 && res.data.token){
                 localStorage.setItem("token", res.data.token)
+                localStorage.setItem("user", res.data.user.name || res.data.user.username)
+                localStorage.setItem("username", res.data.user.username)
+                localStorage.setItem("branch", res.data.branch ?? "")
+                localStorage.setItem("year", String(res.data.year ?? ""))
                 sessionStorage.removeItem("signupData")
                 router.push("/marketplace")
             }

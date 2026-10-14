@@ -40,15 +40,24 @@ export default function MarketplaceNavbar({
   };
 
   const getUserName = () => {
-    const user = localStorage.getItem("user");
+    const token = localStorage.getItem("token");
+    const user =
+      localStorage.getItem("user") ||
+      localStorage.getItem("username") ||
+      "Student";
     const dept = localStorage.getItem("branch");
     const yr = localStorage.getItem("year");
-    if (user) {
-      setIsLoggedIn(true);
+    setIsLoggedIn(Boolean(token));
+    if (token) {
       setUserName(user);
       setUserInitials(getInitials(user));
       setDepartment(dept ?? "");
       setYear(yr ?? "");
+    } else {
+      setUserName("Student");
+      setUserInitials("S");
+      setDepartment("");
+      setYear("");
     }
   };
 
@@ -76,10 +85,9 @@ export default function MarketplaceNavbar({
   }, []);
 
   async function handlesignout() {
-    localStorage.removeItem("user");
-    localStorage.removeItem("branch");
-    localStorage.removeItem("year");
-    localStorage.removeItem("token");
+    ["token", "user", "username", "branch", "year"].forEach((key) =>
+      localStorage.removeItem(key),
+    );
     setIsLoggedIn(false);
     setUserName("Username");
     setDepartment("");
@@ -259,21 +267,43 @@ export default function MarketplaceNavbar({
             >
               Sell an Item
             </Link>
-            {isLoggedIn && (
+            {isLoggedIn ? (
               <div className="pt-2 flex items-center justify-between px-3 border-t border-[#F1F5F9]">
-                <span className="text-xs text-[#64748B]">
-                  {userName}
-                  {(department || year) &&
-                    ` (${[department, year].filter(Boolean).join(" • ")})`}
-                </span>
-                <button
-                  type="button"
-                  onClick={handlesignout}
-                  className="text-xs text-rose-600 font-medium"
-                >
-                  Logout
-                </button>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-[10px] font-bold text-[#2563EB]">
+                    {userInitials}
+                  </span>
+                  <span className="truncate text-xs text-[#64748B]">
+                    {userName}
+                    {(department || year) &&
+                      ` (${[department, year].filter(Boolean).join(" • ")})`}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <Link
+                    href="/profile/mylistings"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="text-xs font-medium text-[#2563EB]"
+                  >
+                    My Listings
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handlesignout}
+                    className="text-xs font-medium text-rose-600"
+                  >
+                    Logout
+                  </button>
+                </div>
               </div>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 text-xs font-semibold text-[#2563EB]"
+              >
+                Login
+              </Link>
             )}
           </div>
         )}

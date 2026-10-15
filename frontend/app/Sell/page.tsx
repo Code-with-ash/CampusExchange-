@@ -20,12 +20,13 @@ import {
   Layers,
   Camera,
   Wand2,
-  RefreshCw,
 } from "lucide-react";
 import { CategoryType, ConditionType } from "../marketplace/types";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { API_URL } from "../../lib/api";
+
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 /* ────────────────────────────────────────────
    Types
    ──────────────────────────────────────────── */
@@ -207,18 +208,17 @@ useEffect(()=> {
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [errorDialogTitle, setErrorDialogTitle] = useState("Could not publish listing");
 
   const [aiValidating, setAiValidating] = useState(false);
   const [aiSuccess, setAiSuccess] = useState<string | null>(null);
   const [aiRejectionReason, setAiRejectionReason] = useState<string | null>(null);
-  const [aiServiceError, setAiServiceError] = useState<string | null>(null);
   const [validationToken, setValidationToken] = useState<string | null>(null);
 
   /* ── AI Validation Call ── */
   const runAiValidation = async (targetFile: File) => {
     setAiValidating(true);
     setAiRejectionReason(null);
-    setAiServiceError(null);
     setAiSuccess(null);
     setValidationToken(null);
 
@@ -268,8 +268,8 @@ useEffect(()=> {
 
         setAiSuccess(detectedTitle || "Product identified successfully");
       } else if (res.data.isAiError) {
-        // AI service down / parsing error
-        setAiServiceError("Something went wrong, please try in few minutes.");
+        setErrorDialogTitle("Could not analyze image");
+        setSubmitError(res.data.message || "Image analysis is temporarily unavailable. Please try again later.");
       } else {
         // Explicit photo rejection by AI (blurry, meme, non-product)
         const reason =
@@ -295,7 +295,13 @@ useEffect(()=> {
         setImagePreviews([]);
         setErrors((prev) => ({ ...prev, images: reason }));
       } else {
-        setAiServiceError("Something went wrong, please try in few minutes.");
+        const responseMessage = axios.isAxiosError(err) ? err.response?.data?.message : null;
+        setErrorDialogTitle("Could not analyze image");
+        setSubmitError(
+          responseMessage === "Invalid image upload"
+            ? "This image could not be uploaded. Please choose an image that is 5 MB or smaller."
+            : responseMessage || "Image analysis is temporarily unavailable. Please try again later.",
+        );
       }
     } finally {
       setAiValidating(false);
@@ -309,12 +315,19 @@ useEffect(()=> {
         f.type.startsWith("image/")
       );
       if (newFiles.length === 0) return;
+      const oversizedFile = newFiles.find((file) => file.size > MAX_IMAGE_SIZE_BYTES);
+      if (oversizedFile) {
+        setErrorDialogTitle("Image is too large");
+        setSubmitError(`${oversizedFile.name} is larger than 5 MB. Choose an image that is 5 MB or smaller.`);
+        return;
+      }
 
       const merged = [...images, ...newFiles].slice(0, 5);
       setImages(merged);
       const previews = merged.map((f) => URL.createObjectURL(f));
       setImagePreviews(previews);
       setErrors((prev) => ({ ...prev, images: "" }));
+      setSubmitError(null);
 
       await runAiValidation(newFiles[0]);
     },
@@ -373,6 +386,7 @@ useEffect(()=> {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+    setErrorDialogTitle("Could not publish listing");
     const allTouched: Record<string, boolean> = {};
     Object.keys(form).forEach((k) => (allTouched[k] = true));
     allTouched.images = true;
@@ -427,6 +441,7 @@ useEffect(()=> {
         ? err.response.data.message
         : "Unable to publish this listing right now. Please try again.";
       const isLocationError = backendMessage.toLowerCase().includes("pickup location");
+      setErrorDialogTitle("Could not publish listing");
       setErrors((prev) => ({
         ...prev,
         submit: backendMessage,
@@ -597,7 +612,7 @@ useEffect(()=> {
                         {isDraggingOver ? "Drop to upload" : "Click or drag & drop photos"}
                       </p>
                       <p className="text-[11px] text-[#94A3B8] mt-1">
-                        PNG, JPG, WEBP • AI auto-detects product details
+                        PNG, JPG, WEBP • Max 5 MB • AI auto-detects product details
                       </p>
                     </>
                   )}
@@ -653,50 +668,6 @@ useEffect(()=> {
                         <Upload size={12} />
                         Upload a different photo
                       </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* AI Service Error Banner */}
-                {aiServiceError && (
-                  <div className="mt-3.5 p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 shrink-0 mt-0.5">
-                      <AlertCircle size={16} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-amber-900">AI Assistant Unavailable</p>
-                        <button
-                          type="button"
-                          onClick={() => setAiServiceError(null)}
-                          className="text-amber-500 hover:text-amber-800 p-0.5"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                      <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-                        Something went wrong, please try in few minutes. You can also fill in the product details manually below.
-                      </p>
-                      {images.length > 0 && (
-                        <div className="mt-2.5 flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => runAiValidation(images[0])}
-                            disabled={aiValidating}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-semibold transition-colors shadow-xs disabled:opacity-50"
-                          >
-                            <RefreshCw size={12} className={aiValidating ? "animate-spin" : ""} />
-                            Retry AI analysis
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setAiServiceError(null)}
-                            className="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-900 hover:bg-amber-100 text-[11px] font-medium transition-colors"
-                          >
-                            Fill manually
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
@@ -998,18 +969,18 @@ useEffect(()=> {
           <div
             role="alertdialog"
             aria-modal="true"
-            aria-labelledby="publish-error-title"
-            aria-describedby="publish-error-message"
+            aria-labelledby="error-dialog-title"
+            aria-describedby="error-dialog-message"
             className="w-full max-w-sm rounded-2xl border border-rose-200 bg-white p-6 text-center shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
               <AlertCircle size={24} />
             </div>
-            <h2 id="publish-error-title" className="text-lg font-bold text-[#0F172A]">
-              Could not publish listing
+            <h2 id="error-dialog-title" className="text-lg font-bold text-[#0F172A]">
+              {errorDialogTitle}
             </h2>
-            <p id="publish-error-message" className="mt-2 text-sm text-[#64748B]">
+            <p id="error-dialog-message" className="mt-2 text-sm text-[#64748B]">
               {submitError}
             </p>
             <button
@@ -1023,7 +994,7 @@ useEffect(()=> {
               }}
               className="mt-5 w-full rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1D4ED8]"
             >
-              Review details
+              {errors.location ? "Review details" : "Got it"}
             </button>
           </div>
         </div>

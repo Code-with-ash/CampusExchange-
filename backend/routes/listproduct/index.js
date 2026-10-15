@@ -17,7 +17,6 @@ import {
 const router = express.Router()
 const groqVisionModel = 'qwen/qwen3.8-27b'
 const groqRequestTimeoutMs = 10000
-const groqMaxAttempts = 2
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -58,79 +57,60 @@ function parseProductAnalysis(responseText) {
 }
 
 async function generateProductAnalysis(image, promptText) {
-  let lastError
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), groqRequestTimeoutMs)
 
-  for (let attempt = 1; attempt <= groqMaxAttempts; attempt += 1) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), groqRequestTimeoutMs)
-
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: groqVisionModel,
-          temperature: 0.2,
-          max_completion_tokens: 1024,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'system',
-              content: promptText,
-            },
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${image.mimetype};base64,${image.buffer.toString('base64')}`,
-                  },
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: groqVisionModel,
+        temperature: 0.2,
+        max_completion_tokens: 1024,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: promptText,
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${image.mimetype};base64,${image.buffer.toString('base64')}`,
                 },
-                {
-                  type: 'text',
-                  text: 'Analyze this product image according to the system instructions.',
-                },
-              ],
-            },
-          ],
-        }),
-        signal: controller.signal,
-      })
+              },
+              {
+                type: 'text',
+                text: 'Analyze this product image according to the system instructions.',
+              },
+            ],
+          },
+        ],
+      }),
+      signal: controller.signal,
+    })
 
-      if (!response.ok) {
-        const requestError = new Error(`Groq API returned HTTP ${response.status}`)
-        if (response.status !== 408 && response.status !== 429 && response.status < 500) {
-          throw Object.assign(requestError, { retryable: false })
-        }
-        throw requestError
-      }
-
-      const result = await response.json()
-      const responseText = result.choices?.[0]?.message?.content
-      if (typeof responseText !== 'string') {
-        throw new Error('Groq API returned no analysis text')
-      }
-
-      return parseProductAnalysis(responseText)
-    } catch (error) {
-      lastError = error
-      const retryable = error?.retryable !== false
-      if (!retryable || attempt === groqMaxAttempts) {
-        throw error
-      }
-
-      console.error(`Groq image analysis attempt ${attempt} failed:`, error?.message || 'Unknown error')
-      await new Promise((resolve) => setTimeout(resolve, attempt * 500))
-    } finally {
-      clearTimeout(timeout)
+    if (!response.ok) {
+      throw new Error(`Groq API returned HTTP ${response.status}`)
     }
-  }
 
-  throw lastError || new Error('Groq image analysis failed')
+    const result = await response.json()
+    const responseText = result.choices?.[0]?.message?.content
+    if (typeof responseText !== 'string') {
+      throw new Error('Groq API returned no analysis text')
+    }
+
+    return parseProductAnalysis(responseText)
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 
@@ -280,11 +260,11 @@ If allowed is true:
     try {
       parsed = await generateProductAnalysis(req.file, promptText)
     } catch (modelError) {
-      console.error("Groq image analysis failed after retries:", modelError?.message || 'Unknown error')
+      console.error("Groq image analysis failed:", modelError?.message || 'Unknown error')
       return res.status(503).json({
         success: false,
         isAiError: true,
-        message: "Image analysis is temporarily unavailable. Please retry in a few moments.",
+        message: "Image analysis is temporarily unavailable. Please try again later.",
       })
     }
 
